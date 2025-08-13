@@ -235,20 +235,29 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
   <script>
-    // Your Firebase config here — REPLACE WITH YOUR OWN from Firebase Console!
+    // Import the functions you need from the SDKs you need
+    import { initializeApp } from "firebase/app";
+    import { getAnalytics } from "firebase/analytics";
+    // TODO: Add SDKs for Firebase products that you want to use
+    // https://firebase.google.com/docs/web/setup#available-libraries
+    
+    // Your web app's Firebase configuration
+    // For Firebase JS SDK v7.20.0 and later, measurementId is optional
     const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-      databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_PROJECT_ID.appspot.com",
-      messagingSenderId: "YOUR_SENDER_ID",
-      appId: "YOUR_APP_ID"
+      apiKey: "AIzaSyC93r-r-kHNFqu1A2KjqSGMBbx44CTwP2w",
+      authDomain: "project-for-work-aa517.firebaseapp.com",
+      databaseURL: "https://project-for-work-aa517-default-rtdb.firebaseio.com",
+      projectId: "project-for-work-aa517",
+      storageBucket: "project-for-work-aa517.firebasestorage.app",
+      messagingSenderId: "51216544368",
+      appId: "1:51216544368:web:92f67608efdef977207ab5",
+      measurementId: "G-H9QVKED2J5"
     };
 
-    // Initialize Firebase
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+
 
     const MAX_PEOPLE_AT_ONCE = 3; // max people allowed working simultaneously
 
