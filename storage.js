@@ -1,21 +1,21 @@
-// Save signups to localStorage whenever updated
+// Save signups object to localStorage
 function saveSignups() {
   localStorage.setItem('signups', JSON.stringify(signups));
 }
 
-// Load signups from localStorage on start
+// Load signups object from localStorage
 function loadSignups() {
-  const data = localStorage.getItem('signups');
-  if (data) {
-    signups = JSON.parse(data);
+  const saved = localStorage.getItem('signups');
+  if (saved) {
+    signups = JSON.parse(saved);
   }
 }
+
+loadSignups();
+renderCalendar();
 
 signups[dateStr].push({ name, startTime, endTime });
 saveSignups();
 
-openModal(dateStr); // Refresh modal
-renderCalendar();   // Update calendar counts/colors
-
-loadSignups();
+openModal(dateStr);
 renderCalendar();
