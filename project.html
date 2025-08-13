@@ -240,29 +240,16 @@
   // { 'YYYY-MM-DD': [ { name, startTime, endTime }, ... ] }
   let signups = {};
 
-  // Load signups from backend API
-  async function loadSignups() {
-    try {
-      const res = await fetch('/api/signups');
-      if (!res.ok) throw new Error('Failed to fetch signups');
-      signups = await res.json();
-    } catch (e) {
-      signups = {};
-      console.error(e);
-    }
+  // Save signups object to localStorage
+  function saveSignups() {
+    localStorage.setItem('signups', JSON.stringify(signups));
   }
 
-  // Save a single new signup to backend API
-  async function saveSignup(dateStr, entry) {
-    try {
-      const res = await fetch('/api/signups', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: dateStr, entry })
-      });
-      if (!res.ok) throw new Error('Failed to save signup');
-    } catch (e) {
-      console.error(e);
+  // Load signups object from localStorage
+  function loadSignups() {
+    const saved = localStorage.getItem('signups');
+    if (saved) {
+      signups = JSON.parse(saved);
     }
   }
 
@@ -332,173 +319,169 @@
     const signupsList = document.getElementById('signupsList');
     const signupForm = document.getElementById('signupForm');
     const errorMsg = document.getElementById('errorMsg');
-    const nameInput = document.getElementById('nameInput');
     const startHourSelect = document.getElementById('startHourSelect');
     const endHourSelect = document.getElementById('endHourSelect');
 
     modalDateTitle.textContent = `Signups for ${dateStr}`;
     errorMsg.textContent = '';
-    nameInput.value = '';
-    startHourSelect.value = '';
-    endHourSelect.value = '';
 
-    // Populate existing signups
-    const entries = signups[dateStr] || [];
+    // Show existing signups
     signupsList.innerHTML = '';
-    if (entries.length === 0) {
-      signupsList.textContent = "No signups yet.";
-    } else {
-      entries.forEach(({name, startTime, endTime}) => {
+
+    if (signups[dateStr] && signups[dateStr].length > 0) {
+      signups[dateStr].forEach(entry => {
         const div = document.createElement('div');
-        div.className = 'signup-entry';
-        div.textContent = `${startTime} - ${endTime} : ${name}`;
+        div.classList.add('signup-entry');
+        div.innerHTML = `<span class="time">${entry.startTime} - ${entry.endTime}</span> <strong>${entry.name}</strong>`;
         signupsList.appendChild(div);
       });
+    } else {
+      signupsList.textContent = "No signups yet.";
     }
 
-    // Populate time dropdowns
-    fillTimeOptions(startHourSelect, DAILY_START, DAILY_END);
-    fillTimeOptions(endHourSelect, DAILY_START, DAILY_END);
+    // Reset form inputs
+    signupForm.reset();
 
-    // Set minimal default for end hour select (at least one hour after start)
-    startHourSelect.onchange = () => {
-      const startVal = startHourSelect.value;
-      if (startVal) {
-        const startHour = parseInt(startVal.split(':')[0]);
-        // Set end select options to start from startHour + 1
-        fillTimeOptions(endHourSelect, addHour(startVal, 1), DAILY_END);
+    // Populate start hour options
+    startHourSelect.innerHTML = '';
+    endHourSelect.innerHTML = '';
+
+    const startHour = parseInt(DAILY_START.split(':')[0], 10);
+    const endHour = parseInt(DAILY_END.split(':')[0], 10);
+
+    for (let h = startHour; h < endHour; h++) {
+      const option = document.createElement('option');
+      option.value = `${String(h).padStart(2, '0')}:00`;
+      option.textContent = `${String(h).padStart(2, '0')}:00`;
+      startHourSelect.appendChild(option);
+    }
+
+    function updateEndHourOptions() {
+      const selectedStart = parseInt(startHourSelect.value.split(':')[0], 10);
+      endHourSelect.innerHTML = '';
+      for (let h = selectedStart + 1; h <= endHour; h++) {
+        const option = document.createElement('option');
+        option.value = `${String(h).padStart(2, '0')}:00`;
+        option.textContent = `${String(h).padStart(2, '0')}:00`;
+        endHourSelect.appendChild(option);
       }
+    }
+
+    startHourSelect.onchange = updateEndHourOptions;
+    updateEndHourOptions();
+
+    signupForm.onsubmit = (e) => {
+      e.preventDefault();
+      errorMsg.textContent = '';
+
+      const name = document.getElementById('nameInput').value.trim();
+      const startTime = startHourSelect.value;
+      const endTime = endHourSelect.value;
+
+      if (!name || !startTime || !endTime) {
+        errorMsg.textContent = "Please fill out all fields.";
+        return;
+      }
+
+      if (parseInt(endTime.split(':')[0], 10) <= parseInt(startTime.split(':')[0], 10)) {
+        errorMsg.textContent = "End hour must be after start hour.";
+        return;
+      }
+
+      if (!signups[dateStr]) signups[dateStr] = [];
+
+      const overlappingCount = countOverlap(signups[dateStr], startTime, endTime);
+      if (overlappingCount >= MAX_PEOPLE_AT_ONCE) {
+        errorMsg.textContent = "Too many people already scheduled during this time range.";
+        return;
+      }
+
+      const userConflict = signups[dateStr].some(entry => entry.name.toLowerCase() === name.toLowerCase() &&
+        timesOverlap(entry.startTime, entry.endTime, startTime, endTime));
+      if (userConflict) {
+        errorMsg.textContent = "You already have a signup overlapping this time.";
+        return;
+      }
+
+      signups[dateStr].push({ name, startTime, endTime });
+      saveSignups();
+
+      openModal(dateStr);
+      renderCalendar();
     };
 
-    // Show modal
     modal.style.display = 'flex';
-    modal.setAttribute('aria-hidden', 'false');
-    // Focus on name input
-    nameInput.focus();
+    modal.focus();
   }
 
   function closeModal() {
     const modal = document.getElementById('modal');
     modal.style.display = 'none';
-    modal.setAttribute('aria-hidden', 'true');
   }
 
-  // Utility to fill select with hour options like "09:00", "10:00", ...
-  function fillTimeOptions(selectElem, startStr, endStr) {
-    selectElem.innerHTML = '';
-    const startHour = parseInt(startStr.split(':')[0]);
-    const endHour = parseInt(endStr.split(':')[0]);
-    for (let h = startHour; h <= endHour; h++) {
-      let hourStr = h.toString().padStart(2, '0') + ':00';
-      const option = document.createElement('option');
-      option.value = hourStr;
-      option.textContent = hourStr;
-      selectElem.appendChild(option);
+  document.getElementById('closeModalBtn').onclick = closeModal;
+
+  window.onclick = function(event) {
+    const modal = document.getElementById('modal');
+    if (event.target === modal) {
+      closeModal();
     }
-  }
+  };
 
-  // Adds hours to HH:MM string
-  function addHour(timeStr, add) {
-    let h = parseInt(timeStr.split(':')[0], 10);
-    let m = parseInt(timeStr.split(':')[1], 10);
-    h += add;
-    if (h > 23) h = 23;
-    return h.toString().padStart(2,'0') + ':' + m.toString().padStart(2,'0');
-  }
+  window.onkeydown = function(e) {
+    if (e.key === "Escape") {
+      closeModal();
+    }
+  };
 
-  // Format date to YYYY-MM-DD
-  function formatDate(year, month, day) {
-    return `${year}-${month.toString().padStart(2,'0')}-${day.toString().padStart(2,'0')}`;
-  }
-
-  // Count how many people overlap given time range
-  function countOverlap(entries, startTime, endTime) {
-    let count = 0;
-    entries.forEach(({startTime: s, endTime: e}) => {
-      if (timesOverlap(s, e, startTime, endTime)) count++;
-    });
-    return count;
-  }
-
-  // Check if two time ranges overlap (inclusive start, exclusive end)
-  function timesOverlap(s1, e1, s2, e2) {
-    return !(e1 <= s2 || e2 <= s1);
-  }
-
-  // Handle month change buttons
   function changeMonth(delta) {
     currentDate.setMonth(currentDate.getMonth() + delta);
     renderCalendar();
   }
 
-  // Setup form submission handler
-  document.getElementById('signupForm').onsubmit = async function (e) {
-    e.preventDefault();
-    const errorMsg = document.getElementById('errorMsg');
-    errorMsg.textContent = '';
+  // Returns true if two time ranges overlap
+  function timesOverlap(start1, end1, start2, end2) {
+    const s1 = parseInt(start1.split(':')[0], 10);
+    const e1 = parseInt(end1.split(':')[0], 10);
+    const s2 = parseInt(start2.split(':')[0], 10);
+    const e2 = parseInt(end2.split(':')[0], 10);
+    return s1 < e2 && s2 < e1;
+  }
 
-    const name = document.getElementById('nameInput').value.trim();
-    const startTime = document.getElementById('startHourSelect').value;
-    const endTime = document.getElementById('endHourSelect').value;
+  // NEW countOverlap function: count overlaps hour-by-hour in the new range
+  function countOverlap(entries, start, end) {
+    const startHour = parseInt(start.split(':')[0], 10);
+    const endHour = parseInt(end.split(':')[0], 10);
 
-    if (!name || !startTime || !endTime) {
-      errorMsg.textContent = "Please fill out all fields.";
-      return;
-    }
-    if (parseInt(endTime.split(':')[0]) <= parseInt(startTime.split(':')[0])) {
-      errorMsg.textContent = "End hour must be after start hour.";
-      return;
-    }
+    // For each hour in the new range, count how many existing entries overlap
+    for (let hour = startHour; hour < endHour; hour++) {
+      let overlappingCount = 0;
 
-    // Get date from modal title: "Signups for YYYY-MM-DD"
-    const modalDateTitle = document.getElementById('modalDateTitle').textContent;
-    const dateStr = modalDateTitle.replace('Signups for ', '');
+      entries.forEach(entry => {
+        const entryStart = parseInt(entry.startTime.split(':')[0], 10);
+        const entryEnd = parseInt(entry.endTime.split(':')[0], 10);
 
-    if (!signups[dateStr]) signups[dateStr] = [];
+        // Check if this hour overlaps with the entry's hours
+        if (hour >= entryStart && hour < entryEnd) {
+          overlappingCount++;
+        }
+      });
 
-    // Check max overlap
-    const overlappingCount = countOverlap(signups[dateStr], startTime, endTime);
-    if (overlappingCount >= MAX_PEOPLE_AT_ONCE) {
-      errorMsg.textContent = "Too many people already scheduled during this time range.";
-      return;
-    }
-
-    // Check user overlap
-    const userConflict = signups[dateStr].some(entry => entry.name.toLowerCase() === name.toLowerCase() &&
-      timesOverlap(entry.startTime, entry.endTime, startTime, endTime));
-    if (userConflict) {
-      errorMsg.textContent = "You already have a signup overlapping this time.";
-      return;
+      if (overlappingCount >= MAX_PEOPLE_AT_ONCE) {
+        return overlappingCount; // early exit if full overlap found
+      }
     }
 
-    const newEntry = { name, startTime, endTime };
-    signups[dateStr].push(newEntry);
+    return 0; // no hour fully booked
+  }
 
-    await saveSignup(dateStr, newEntry);
-    await loadSignups();
+  // Helper to format YYYY-MM-DD string
+  function formatDate(y, m, d) {
+    return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  }
 
-    openModal(dateStr);
-    renderCalendar();
-  };
-
-  // Modal close button
-  document.getElementById('closeModalBtn').onclick = closeModal;
-  // Close modal on outside click
-  document.getElementById('modal').onclick = (e) => {
-    if (e.target === e.currentTarget) closeModal();
-  };
-  // Close modal on Escape key
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && document.getElementById('modal').style.display === 'flex') {
-      closeModal();
-    }
-  });
-
-  // Initial load
-  (async () => {
-    await loadSignups();
-    renderCalendar();
-  })();
+  loadSignups();
+  renderCalendar();
 </script>
 
 </body>
