@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>Schedule by Hour Ranges</title>
+  <title>Schedule by Hour Ranges (Firebase)</title>
   <style>
+    /* Your existing CSS styles here */
     body {
       font-family: Arial, sans-serif;
       text-align: center;
@@ -229,289 +230,272 @@
     </div>
   </div>
 
-<script>
-  const MAX_PEOPLE_AT_ONCE = 3; // max people allowed working simultaneously
-  const DAILY_START = "09:00";
-  const DAILY_END = "18:00";
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
-  let currentDate = new Date();
+  <script>
+    const MAX_PEOPLE_AT_ONCE = 3; // max people allowed working simultaneously
+    const DAILY_START = "09:00";
+    const DAILY_END = "18:00";
 
-  // signups format:
-  // { 'YYYY-MM-DD': [ { name, startTime, endTime }, ... ] }
-  let signups = {};
+    let currentDate = new Date();
 
-  // Save signups object to localStorage
-  function saveSignups() {
-    localStorage.setItem('signups', JSON.stringify(signups));
-  }
+    // Firebase config - replace this with YOUR config from Firebase Console
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+      databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT_ID.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
 
-  // Remove signups from past dates (before today)
-  function cleanOldSignups() {
-    const todayStr = formatDate(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate());
-    let changed = false;
-    for (const dateStr in signups) {
-      if (dateStr < todayStr) {
-        delete signups[dateStr];
-        changed = true;
-      }
-    }
-    if (changed) saveSignups();
-  }
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
 
-  // Load signups object from localStorage and clean old signups
-  function loadSignups() {
-    const saved = localStorage.getItem('signups');
-    if (saved) {
-      signups = JSON.parse(saved);
-    }
-    cleanOldSignups();
-  }
+    // Signups stored here in memory for current session, sync with Firebase
+    let signups = {};
 
-  function renderCalendar() {
-    const calendar = document.getElementById('calendar');
-    const monthYear = document.getElementById('monthYear');
-    calendar.innerHTML = '';
-
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const startDay = firstDay.getDay(); // Sunday = 0
-
-    monthYear.textContent = `${firstDay.toLocaleString('default', { month: 'long' })} ${year}`;
-
-    // Fill empty cells for first week day offset
-    for (let i = 0; i < startDay; i++) {
-      const empty = document.createElement('div');
-      calendar.appendChild(empty);
+    function saveSignupsToFirebase() {
+      db.ref('signups').set(signups);
     }
 
-    const today = new Date();
-    today.setHours(0,0,0,0); // clear time for date comparison
-
-    for (let day = 1; day <= lastDay.getDate(); day++) {
-      const dateStr = formatDate(year, month + 1, day);
-      const dayDate = new Date(year, month, day);
-      dayDate.setHours(0,0,0,0);
-
-      const dayDiv = document.createElement('div');
-      dayDiv.classList.add('day');
-      dayDiv.setAttribute('role', 'listitem');
-      dayDiv.setAttribute('tabindex', '-1');
-
-      const totalSignups = (signups[dateStr] || []).length;
-
-      dayDiv.innerHTML = `<div class="date-number">${day}</div>
-                          <div class="signup-count">${totalSignups} signed up</div>`;
-
-      // Disable past days (not clickable)
-      if (dayDate < today) {
-        dayDiv.style.backgroundColor = '#f0f0f0';
-        dayDiv.style.color = '#999';
-        dayDiv.style.cursor = 'not-allowed';
-        dayDiv.setAttribute('aria-disabled', 'true');
-      } else {
-        dayDiv.onclick = () => openModal(dateStr);
-        dayDiv.setAttribute('tabindex', '0');
-        dayDiv.setAttribute('aria-label', `Day ${day}, ${totalSignups} people signed up. Tap to sign up.`);
-        dayDiv.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            openModal(dateStr);
-          }
-        });
-      }
-
-      calendar.appendChild(dayDiv);
-    }
-  }
-
-  function openModal(dateStr) {
-    const modal = document.getElementById('modal');
-    const modalDateTitle = document.getElementById('modalDateTitle');
-    const signupsList = document.getElementById('signupsList');
-    const signupForm = document.getElementById('signupForm');
-    const errorMsg = document.getElementById('errorMsg');
-    const startHourSelect = document.getElementById('startHourSelect');
-    const endHourSelect = document.getElementById('endHourSelect');
-
-    modalDateTitle.textContent = `Signups for ${dateStr}`;
-    errorMsg.textContent = '';
-
-    // Show existing signups
-    signupsList.innerHTML = '';
-
-    if (signups[dateStr] && signups[dateStr].length > 0) {
-      signups[dateStr].forEach(entry => {
-        const div = document.createElement('div');
-        div.classList.add('signup-entry');
-        div.innerHTML = `<span class="time">${entry.startTime} - ${entry.endTime}</span> <strong>${entry.name}</strong>`;
-        signupsList.appendChild(div);
+    function loadSignupsFromFirebase(callback) {
+      db.ref('signups').on('value', (snapshot) => {
+        signups = snapshot.val() || {};
+        callback();
       });
-    } else {
-      signupsList.textContent = "No signups yet.";
     }
 
-    // Reset form inputs
-    signupForm.reset();
+    function renderCalendar() {
+      const calendar = document.getElementById('calendar');
+      const monthYear = document.getElementById('monthYear');
+      calendar.innerHTML = '';
 
-    // Populate start hour options
-    startHourSelect.innerHTML = '';
-    endHourSelect.innerHTML = '';
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
 
-    const startHour = parseInt(DAILY_START.split(':')[0], 10);
-    const endHour = parseInt(DAILY_END.split(':')[0], 10);
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      const startDay = firstDay.getDay(); // Sunday = 0
 
-    for (let h = startHour; h < endHour; h++) {
-      const option = document.createElement('option');
-      option.value = `${String(h).padStart(2, '0')}:00`;
-      option.textContent = `${String(h).padStart(2, '0')}:00`;
-      startHourSelect.appendChild(option);
+      monthYear.textContent = `${firstDay.toLocaleString('default', { month: 'long' })} ${year}`;
+
+      // Fill empty cells for first week day offset
+      for (let i = 0; i < startDay; i++) {
+        const empty = document.createElement('div');
+        calendar.appendChild(empty);
+      }
+
+      const today = new Date();
+      today.setHours(0,0,0,0); // clear time for date comparison
+
+      for (let day = 1; day <= lastDay.getDate(); day++) {
+        const dateStr = formatDate(year, month + 1, day);
+        const dayDate = new Date(year, month, day);
+        dayDate.setHours(0,0,0,0);
+
+        const dayDiv = document.createElement('div');
+        dayDiv.classList.add('day');
+        dayDiv.setAttribute('role', 'listitem');
+        dayDiv.setAttribute('tabindex', '-1');
+
+        const totalSignups = (signups[dateStr] || []).length;
+
+        dayDiv.innerHTML = `<div class="date-number">${day}</div>
+                            <div class="signup-count">${totalSignups} signed up</div>`;
+
+        // Disable past days (not clickable)
+        if (dayDate < today) {
+          dayDiv.style.backgroundColor = '#f0f0f0';
+          dayDiv.style.color = '#999';
+          dayDiv.style.cursor = 'not-allowed';
+          dayDiv.setAttribute('aria-disabled', 'true');
+        } else {
+          dayDiv.onclick = () => openModal(dateStr);
+          dayDiv.setAttribute('tabindex', '0');
+          dayDiv.setAttribute('aria-label', `Day ${day}, ${totalSignups} people signed up. Tap to sign up.`);
+          dayDiv.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              openModal(dateStr);
+            }
+          });
+        }
+
+        calendar.appendChild(dayDiv);
+      }
     }
 
-    function updateEndHourOptions() {
-      const selectedStart = parseInt(startHourSelect.value.split(':')[0], 10);
+    function openModal(dateStr) {
+      const modal = document.getElementById('modal');
+      const modalDateTitle = document.getElementById('modalDateTitle');
+      const signupsList = document.getElementById('signupsList');
+      const signupForm = document.getElementById('signupForm');
+      const errorMsg = document.getElementById('errorMsg');
+      const startHourSelect = document.getElementById('startHourSelect');
+      const endHourSelect = document.getElementById('endHourSelect');
+
+      modalDateTitle.textContent = `Signups for ${dateStr}`;
+      errorMsg.textContent = '';
+
+      // Show existing signups
+      signupsList.innerHTML = '';
+
+      if (signups[dateStr] && signups[dateStr].length > 0) {
+        signups[dateStr].forEach(entry => {
+          const div = document.createElement('div');
+          div.classList.add('signup-entry');
+          div.innerHTML = `<span class="time">${entry.startTime} - ${entry.endTime}</span> <strong>${entry.name}</strong>`;
+          signupsList.appendChild(div);
+        });
+      } else {
+        signupsList.textContent = "No signups yet.";
+      }
+
+      // Reset form inputs
+      signupForm.reset();
+
+      // Populate start hour options
+      startHourSelect.innerHTML = '';
       endHourSelect.innerHTML = '';
-      for (let h = selectedStart + 1; h <= endHour; h++) {
+
+      const startHour = parseInt(DAILY_START.split(':')[0], 10);
+      const endHour = parseInt(DAILY_END.split(':')[0], 10);
+
+      for (let h = startHour; h < endHour; h++) {
         const option = document.createElement('option');
         option.value = `${String(h).padStart(2, '0')}:00`;
         option.textContent = `${String(h).padStart(2, '0')}:00`;
-        endHourSelect.appendChild(option);
-      }
-    }
-
-    startHourSelect.onchange = updateEndHourOptions;
-    updateEndHourOptions();
-
-    // Handle form submission
-    signupForm.onsubmit = function(e) {
-      e.preventDefault();
-      errorMsg.textContent = '';
-
-      const name = document.getElementById('nameInput').value.trim();
-      const startTime = startHourSelect.value;
-      const endTime = endHourSelect.value;
-
-      if (name.length === 0) {
-        errorMsg.textContent = 'Please enter your name.';
-        return;
-      }
-      if (!isValidTimeRange(startTime, endTime)) {
-        errorMsg.textContent = 'Invalid time range.';
-        return;
-      }
-      if (hasOverlap(dateStr, startTime, endTime)) {
-        errorMsg.textContent = 'Time range overlaps with another signup.';
-        return;
-      }
-      if (wouldExceedMax(dateStr, startTime, endTime)) {
-        errorMsg.textContent = 'Max people working at once exceeded for this time.';
-        return;
+        startHourSelect.appendChild(option);
       }
 
-      // Add signup
-      if (!signups[dateStr]) {
-        signups[dateStr] = [];
-      }
-      signups[dateStr].push({ name, startTime, endTime });
-      saveSignups();
-      renderCalendar();
-      openModal(dateStr); // Refresh modal display with updated signups
-    };
-
-    modal.style.display = 'flex';
-
-    // Focus the modal for accessibility
-    modal.focus();
-  }
-
-  function closeModal() {
-    const modal = document.getElementById('modal');
-    modal.style.display = 'none';
-  }
-
-  document.getElementById('closeModalBtn').onclick = closeModal;
-
-  // Close modal on background click
-  document.getElementById('modal').onclick = function(e) {
-    if (e.target === this) closeModal();
-  };
-
-  // Keyboard accessibility for modal close on ESC
-  document.addEventListener('keydown', (e) => {
-    const modal = document.getElementById('modal');
-    if (modal.style.display === 'flex' && e.key === 'Escape') {
-      closeModal();
-    }
-  });
-
-  function changeMonth(offset) {
-    currentDate.setMonth(currentDate.getMonth() + offset);
-    renderCalendar();
-  }
-
-  // Utility to format date as YYYY-MM-DD
-  function formatDate(year, month, day) {
-    return `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-  }
-
-  // Validate that end > start
-  function isValidTimeRange(start, end) {
-    return (start < end);
-  }
-
-  // Check if new time overlaps existing signups on date
-  function hasOverlap(dateStr, newStart, newEnd) {
-    if (!signups[dateStr]) return false;
-
-    const newStartTime = timeToMinutes(newStart);
-    const newEndTime = timeToMinutes(newEnd);
-
-    for (const s of signups[dateStr]) {
-      const sStart = timeToMinutes(s.startTime);
-      const sEnd = timeToMinutes(s.endTime);
-      if (newStartTime < sEnd && newEndTime > sStart) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  // Check if adding new signup exceeds max people limit
-  function wouldExceedMax(dateStr, newStart, newEnd) {
-    const newStartTime = timeToMinutes(newStart);
-    const newEndTime = timeToMinutes(newEnd);
-
-    // Count how many signups overlap with new time interval
-    if (!signups[dateStr]) return false;
-
-    for (let t = newStartTime; t < newEndTime; t++) {
-      let count = 0;
-      for (const s of signups[dateStr]) {
-        const sStart = timeToMinutes(s.startTime);
-        const sEnd = timeToMinutes(s.endTime);
-        if (t >= sStart && t < sEnd) {
-          count++;
+      function updateEndHourOptions() {
+        const selectedStart = parseInt(startHourSelect.value.split(':')[0], 10);
+        endHourSelect.innerHTML = '';
+        for (let h = selectedStart + 1; h <= endHour; h++) {
+          const option = document.createElement('option');
+          option.value = `${String(h).padStart(2, '0')}:00`;
+          option.textContent = `${String(h).padStart(2, '0')}:00`;
+          endHourSelect.appendChild(option);
         }
       }
-      if (count >= MAX_PEOPLE_AT_ONCE) {
-        return true;
-      }
+
+      startHourSelect.addEventListener('change', updateEndHourOptions);
+      updateEndHourOptions();
+
+      modal.style.display = 'flex';
+      modal.focus();
+
+      // Form submission handler
+      signupForm.onsubmit = (e) => {
+        e.preventDefault();
+        errorMsg.textContent = '';
+
+        const name = document.getElementById('nameInput').value.trim();
+        const startTime = startHourSelect.value;
+        const endTime = endHourSelect.value;
+
+        if (!name) {
+          errorMsg.textContent = "Name is required.";
+          return;
+        }
+
+        if (startTime >= endTime) {
+          errorMsg.textContent = "End hour must be later than start hour.";
+          return;
+        }
+
+        // Check max simultaneous people constraint
+        if (!canAddSignup(dateStr, startTime, endTime)) {
+          errorMsg.textContent = `Maximum ${MAX_PEOPLE_AT_ONCE} people allowed simultaneously in overlapping time ranges.`;
+          return;
+        }
+
+        addSignup(dateStr, { name, startTime, endTime });
+        saveSignupsToFirebase();
+
+        // Close modal and refresh calendar
+        modal.style.display = 'none';
+        renderCalendar();
+      };
     }
-    return false;
-  }
 
-  // Convert "HH:MM" to minutes since midnight
-  function timeToMinutes(t) {
-    const [h, m] = t.split(':').map(Number);
-    return h * 60 + m;
-  }
+    function canAddSignup(dateStr, startTime, endTime) {
+      const entries = signups[dateStr] || [];
+      const [newStartH, newStartM] = startTime.split(':').map(Number);
+      const [newEndH, newEndM] = endTime.split(':').map(Number);
+      const newStart = newStartH * 60 + newStartM;
+      const newEnd = newEndH * 60 + newEndM;
 
-  // Initialize
-  loadSignups();
-  renderCalendar();
-</script>
+      // Check overlapping counts for each minute of new signup
+      // Optimize by checking overlapping intervals instead of every minute
+      // But since max 3 people and small dataset, a simple approach is fine
+
+      // Collect time points (start/end) from existing signups and the new one
+      let overlaps = 0;
+
+      for (let m = newStart; m < newEnd; m++) {
+        // Count how many existing signups overlap minute m
+        let count = 0;
+        for (const entry of entries) {
+          const [startH, startM] = entry.startTime.split(':').map(Number);
+          const [endH, endM] = entry.endTime.split(':').map(Number);
+          const start = startH * 60 + startM;
+          const end = endH * 60 + endM;
+          if (m >= start && m < end) {
+            count++;
+          }
+        }
+        if (count >= MAX_PEOPLE_AT_ONCE) {
+          return false; // reached max for this minute
+        }
+      }
+      return true;
+    }
+
+    function addSignup(dateStr, entry) {
+      if (!signups[dateStr]) signups[dateStr] = [];
+      signups[dateStr].push(entry);
+    }
+
+    function formatDate(year, month, day) {
+      return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
+
+    function changeMonth(delta) {
+      currentDate.setMonth(currentDate.getMonth() + delta);
+      renderCalendar();
+    }
+
+    // Close modal handlers
+    document.getElementById('closeModalBtn').onclick = () => {
+      document.getElementById('modal').style.display = 'none';
+    };
+
+    // Close modal if user clicks outside modalContent
+    document.getElementById('modal').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) {
+        e.currentTarget.style.display = 'none';
+      }
+    });
+
+    // Keyboard accessibility for modal: Escape key closes modal
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const modal = document.getElementById('modal');
+        if (modal.style.display === 'flex') {
+          modal.style.display = 'none';
+        }
+      }
+    });
+
+    // On page load, get signups from Firebase, then render calendar
+    loadSignupsFromFirebase(renderCalendar);
+  </script>
 
 </body>
 </html>
