@@ -2,30 +2,36 @@
 <html lang="en" >
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Schedule with Custom Time Ranges</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Schedule by Hour Ranges</title>
   <style>
     body {
       font-family: Arial, sans-serif;
       text-align: center;
       max-width: 700px;
       margin: auto;
+      padding: 10px;
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
     }
     .calendar {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
       gap: 8px;
       margin-top: 20px;
+      user-select: none;
     }
     .day {
       border: 1px solid #ccc;
-      padding: 10px;
-      min-height: 80px;
+      padding: 12px 8px;
+      min-height: 90px;
       cursor: pointer;
       position: relative;
-      border-radius: 4px;
+      border-radius: 6px;
       background-color: #fefefe;
       transition: background-color 0.3s;
+      font-size: 14px;
+      -webkit-tap-highlight-color: transparent;
     }
     .day:hover {
       background-color: #e6f7ff;
@@ -36,28 +42,43 @@
     }
     .day .date-number {
       font-weight: bold;
-      font-size: 1.2em;
+      font-size: 1.3em;
+      margin-bottom: 6px;
+      user-select: none;
     }
     .signup-count {
-      margin-top: 6px;
-      font-size: 0.85em;
+      margin-top: 8px;
+      font-size: 0.9em;
       color: #444;
     }
     .header {
       display: flex;
       justify-content: center;
       align-items: center;
-      gap: 12px;
+      gap: 16px;
       margin-top: 20px;
+      flex-wrap: wrap;
     }
     button {
-      padding: 6px 14px;
-      font-size: 1em;
+      padding: 12px 18px;
+      font-size: 1.1em;
       cursor: pointer;
+      border-radius: 6px;
+      border: 1px solid #007bff;
+      background: #007bff;
+      color: white;
+      transition: background-color 0.3s;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    button:hover {
+      background-color: #0056b3;
     }
     #monthYear {
       margin: 0 12px;
-      font-size: 1.5em;
+      font-size: 1.8em;
+      user-select: none;
+      white-space: nowrap;
     }
     /* Modal styles */
     #modal {
@@ -67,31 +88,40 @@
       background: rgba(0,0,0,0.5);
       justify-content: center;
       align-items: center;
+      padding: 10px;
+      z-index: 9999;
+      -webkit-overflow-scrolling: touch;
     }
     #modalContent {
       background: white;
       padding: 20px;
-      width: 350px;
-      border-radius: 8px;
+      width: 100%;
+      max-width: 400px;
+      border-radius: 10px;
       text-align: left;
       max-height: 80vh;
       overflow-y: auto;
       position: relative;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+      font-size: 16px;
     }
     #modalContent h3 {
       margin-top: 0;
+      font-size: 1.4em;
+      user-select: none;
     }
     .signup-entry {
       border: 1px solid #ddd;
-      padding: 8px;
-      margin-bottom: 6px;
-      border-radius: 4px;
-      font-size: 0.9em;
+      padding: 10px;
+      margin-bottom: 8px;
+      border-radius: 6px;
+      font-size: 1em;
       background: #f0f8ff;
+      word-break: break-word;
     }
     .signup-entry .time {
       font-weight: bold;
-      margin-right: 8px;
+      margin-right: 10px;
     }
     form {
       margin-top: 15px;
@@ -101,13 +131,20 @@
     label {
       display: block;
       margin-bottom: 6px;
+      font-weight: 600;
+      font-size: 1em;
     }
-    input[type="time"], input[type="text"] {
+    select, input[type="text"] {
       width: 100%;
-      padding: 6px;
-      margin-bottom: 10px;
+      padding: 10px;
+      margin-bottom: 14px;
       box-sizing: border-box;
       font-size: 1em;
+      border: 1.5px solid #ccc;
+      border-radius: 6px;
+      outline-offset: 2px;
+      -webkit-appearance: none;
+      appearance: none;
     }
     #closeModalBtn {
       position: absolute;
@@ -115,54 +152,77 @@
       right: 14px;
       background: #eee;
       border: none;
-      font-size: 1.2em;
+      font-size: 1.8em;
       cursor: pointer;
       border-radius: 50%;
-      width: 28px;
-      height: 28px;
-      line-height: 28px;
+      width: 34px;
+      height: 34px;
+      line-height: 34px;
       text-align: center;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      transition: background-color 0.2s;
     }
     #closeModalBtn:hover {
       background: #ccc;
     }
     .error {
       color: red;
-      font-size: 0.9em;
+      font-size: 0.95em;
       margin-bottom: 10px;
+      min-height: 1.2em;
+    }
+
+    /* Responsive tweaks */
+    @media (max-width: 600px) {
+      .calendar {
+        grid-template-columns: repeat(4, 1fr);
+      }
+      button {
+        padding: 10px 14px;
+        font-size: 1em;
+      }
+      #monthYear {
+        font-size: 1.3em;
+      }
+      .day {
+        min-height: 70px;
+        font-size: 13px;
+        padding: 10px 6px;
+      }
     }
   </style>
 </head>
 <body>
 
-  <h1>Schedule with Custom Time Ranges</h1>
+  <h1>Schedule by Hour Ranges</h1>
   <div class="header">
-    <button onclick="changeMonth(-1)">&#8592; Prev</button>
-    <h2 id="monthYear"></h2>
-    <button onclick="changeMonth(1)">Next &#8594;</button>
+    <button onclick="changeMonth(-1)" aria-label="Previous Month">&#8592; Prev</button>
+    <h2 id="monthYear" aria-live="polite"></h2>
+    <button onclick="changeMonth(1)" aria-label="Next Month">Next &#8594;</button>
   </div>
 
-  <div class="calendar" id="calendar"></div>
+  <div class="calendar" id="calendar" role="list" aria-label="Calendar days"></div>
 
   <!-- Modal for signups -->
-  <div id="modal">
+  <div id="modal" role="dialog" aria-modal="true" aria-labelledby="modalDateTitle" tabindex="-1">
     <div id="modalContent">
       <button id="closeModalBtn" title="Close">&times;</button>
       <h3 id="modalDateTitle"></h3>
-      <div id="signupsList">
+      <div id="signupsList" tabindex="0" aria-live="polite">
         <!-- existing signups shown here -->
       </div>
 
       <form id="signupForm">
-        <div class="error" id="errorMsg"></div>
+        <div class="error" id="errorMsg" aria-live="assertive"></div>
         <label for="nameInput">Your Name:</label>
-        <input type="text" id="nameInput" required placeholder="Enter your name" />
+        <input type="text" id="nameInput" required placeholder="Enter your name" autocomplete="name" />
 
-        <label for="startTimeInput">Start Time:</label>
-        <input type="time" id="startTimeInput" required />
+        <label for="startHourSelect">Start Hour:</label>
+        <select id="startHourSelect" required aria-describedby="startHourDesc"></select>
 
-        <label for="endTimeInput">End Time:</label>
-        <input type="time" id="endTimeInput" required />
+        <label for="endHourSelect">End Hour:</label>
+        <select id="endHourSelect" required aria-describedby="endHourDesc"></select>
 
         <button type="submit">Sign Up</button>
       </form>
@@ -207,23 +267,48 @@
 
     monthYear.textContent = `${firstDay.toLocaleString('default', { month: 'long' })} ${year}`;
 
+    // Fill empty cells for first week day offset
     for (let i = 0; i < startDay; i++) {
       const empty = document.createElement('div');
       calendar.appendChild(empty);
     }
 
+    const today = new Date();
+    today.setHours(0,0,0,0); // clear time for date comparison
+
     for (let day = 1; day <= lastDay.getDate(); day++) {
       const dateStr = formatDate(year, month + 1, day);
+      const dayDate = new Date(year, month, day);
+      dayDate.setHours(0,0,0,0);
 
       const dayDiv = document.createElement('div');
       dayDiv.classList.add('day');
+      dayDiv.setAttribute('role', 'listitem');
+      dayDiv.setAttribute('tabindex', '-1');
 
       const totalSignups = (signups[dateStr] || []).length;
 
       dayDiv.innerHTML = `<div class="date-number">${day}</div>
                           <div class="signup-count">${totalSignups} signed up</div>`;
 
-      dayDiv.onclick = () => openModal(dateStr);
+      // Disable past days (not clickable)
+      if (dayDate < today) {
+        dayDiv.style.backgroundColor = '#f0f0f0';
+        dayDiv.style.color = '#999';
+        dayDiv.style.cursor = 'not-allowed';
+        dayDiv.setAttribute('aria-disabled', 'true');
+      } else {
+        dayDiv.onclick = () => openModal(dateStr);
+        dayDiv.setAttribute('tabindex', '0');
+        dayDiv.setAttribute('aria-label', `Day ${day}, ${totalSignups} people signed up. Tap to sign up.`);
+        dayDiv.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            openModal(dateStr);
+          }
+        });
+      }
+
       calendar.appendChild(dayDiv);
     }
   }
@@ -234,6 +319,8 @@
     const signupsList = document.getElementById('signupsList');
     const signupForm = document.getElementById('signupForm');
     const errorMsg = document.getElementById('errorMsg');
+    const startHourSelect = document.getElementById('startHourSelect');
+    const endHourSelect = document.getElementById('endHourSelect');
 
     modalDateTitle.textContent = `Signups for ${dateStr}`;
     errorMsg.textContent = '';
@@ -255,44 +342,60 @@
     // Reset form inputs
     signupForm.reset();
 
-    // Set allowed min/max time for inputs
-    document.getElementById('startTimeInput').min = DAILY_START;
-    document.getElementById('startTimeInput').max = DAILY_END;
-    document.getElementById('endTimeInput').min = DAILY_START;
-    document.getElementById('endTimeInput').max = DAILY_END;
+    // Populate start hour options
+    startHourSelect.innerHTML = '';
+    endHourSelect.innerHTML = '';
 
-    // On form submit
+    const startHour = parseInt(DAILY_START.split(':')[0], 10);
+    const endHour = parseInt(DAILY_END.split(':')[0], 10);
+
+    for (let h = startHour; h < endHour; h++) {
+      const option = document.createElement('option');
+      option.value = `${String(h).padStart(2, '0')}:00`;
+      option.textContent = `${String(h).padStart(2, '0')}:00`;
+      startHourSelect.appendChild(option);
+    }
+
+    function updateEndHourOptions() {
+      const selectedStart = parseInt(startHourSelect.value.split(':')[0], 10);
+      endHourSelect.innerHTML = '';
+      for (let h = selectedStart + 1; h <= endHour; h++) {
+        const option = document.createElement('option');
+        option.value = `${String(h).padStart(2, '0')}:00`;
+        option.textContent = `${String(h).padStart(2, '0')}:00`;
+        endHourSelect.appendChild(option);
+      }
+    }
+
+    startHourSelect.onchange = updateEndHourOptions;
+    updateEndHourOptions();
+
     signupForm.onsubmit = (e) => {
       e.preventDefault();
       errorMsg.textContent = '';
 
       const name = document.getElementById('nameInput').value.trim();
-      const startTime = document.getElementById('startTimeInput').value;
-      const endTime = document.getElementById('endTimeInput').value;
+      const startTime = startHourSelect.value;
+      const endTime = endHourSelect.value;
 
       if (!name || !startTime || !endTime) {
         errorMsg.textContent = "Please fill out all fields.";
         return;
       }
-      if (endTime <= startTime) {
-        errorMsg.textContent = "End time must be after start time.";
-        return;
-      }
-      if (startTime < DAILY_START || endTime > DAILY_END) {
-        errorMsg.textContent = `Time must be within working hours: ${DAILY_START} - ${DAILY_END}`;
+
+      if (parseInt(endTime.split(':')[0], 10) <= parseInt(startTime.split(':')[0], 10)) {
+        errorMsg.textContent = "End hour must be after start hour.";
         return;
       }
 
       if (!signups[dateStr]) signups[dateStr] = [];
 
-      // Check overlap & capacity
       const overlappingCount = countOverlap(signups[dateStr], startTime, endTime);
       if (overlappingCount >= MAX_PEOPLE_AT_ONCE) {
         errorMsg.textContent = "Too many people already scheduled during this time range.";
         return;
       }
 
-      // Check if user already signed up for overlapping time
       const userConflict = signups[dateStr].some(entry => entry.name.toLowerCase() === name.toLowerCase() &&
         timesOverlap(entry.startTime, entry.endTime, startTime, endTime));
       if (userConflict) {
@@ -300,18 +403,18 @@
         return;
       }
 
-      // Add signup
       signups[dateStr].push({ name, startTime, endTime });
       saveSignups();
 
-      openModal(dateStr); // Refresh modal
-      renderCalendar();   // Update calendar counts/colors
+      openModal(dateStr);
+      renderCalendar();
     };
 
     modal.style.display = 'flex';
+    // Focus first input for easier typing on mobile
+    document.getElementById('nameInput').focus();
   }
 
-  // Count how many signups overlap with given time range
   function countOverlap(entries, start, end) {
     let count = 0;
     entries.forEach(entry => {
@@ -322,7 +425,6 @@
     return count;
   }
 
-  // Check if two time ranges overlap
   function timesOverlap(start1, end1, start2, end2) {
     return start1 < end2 && start2 < end1;
   }
@@ -340,14 +442,12 @@
     document.getElementById('modal').style.display = 'none';
   };
 
-  // Close modal if clicking outside content
   document.getElementById('modal').onclick = (e) => {
     if (e.target.id === 'modal') {
       e.target.style.display = 'none';
     }
   };
 
-  // Load saved signups and render calendar
   loadSignups();
   renderCalendar();
 </script>
