@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>Schedule by Hour Ranges (Firebase)</title>
+  <title>Schedule by Hour Ranges</title>
   <style>
-    /* Your original styles here */
     body {
       font-family: Arial, sans-serif;
       text-align: center;
@@ -196,7 +195,7 @@
 </head>
 <body>
 
-  <h1>Schedule by Hour Ranges (Firebase)</h1>
+  <h1>Schedule by Hour Ranges</h1>
   <div class="header">
     <button onclick="changeMonth(-1)" aria-label="Previous Month">&#8592; Prev</button>
     <h2 id="monthYear" aria-live="polite"></h2>
@@ -230,395 +229,313 @@
     </div>
   </div>
 
-  <!-- Firebase SDK -->
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script>
+  const MAX_PEOPLE_AT_ONCE = 3; // max people allowed working simultaneously
+  const DAILY_START = "09:00";
+  const DAILY_END = "18:00";
 
-  <script>
-    // Import the functions you need from the SDKs you need
-    import { initializeApp } from "firebase/app";
-    import { getAnalytics } from "firebase/analytics";
-    // TODO: Add SDKs for Firebase products that you want to use
-    // https://firebase.google.com/docs/web/setup#available-libraries
-    
-    // Your web app's Firebase configuration
-    // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-    const firebaseConfig = {
-      apiKey: "AIzaSyC93r-r-kHNFqu1A2KjqSGMBbx44CTwP2w",
-      authDomain: "project-for-work-aa517.firebaseapp.com",
-      databaseURL: "https://project-for-work-aa517-default-rtdb.firebaseio.com",
-      projectId: "project-for-work-aa517",
-      storageBucket: "project-for-work-aa517.firebasestorage.app",
-      messagingSenderId: "51216544368",
-      appId: "1:51216544368:web:92f67608efdef977207ab5",
-      measurementId: "G-H9QVKED2J5"
-    };
+  let currentDate = new Date();
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+  // signups format:
+  // { 'YYYY-MM-DD': [ { name, startTime, endTime }, ... ] }
+  let signups = {};
 
+  // Save signups object to localStorage
+  function saveSignups() {
+    localStorage.setItem('signups', JSON.stringify(signups));
+  }
 
-    const MAX_PEOPLE_AT_ONCE = 3; // max people allowed working simultaneously
+  // Remove signups from past dates (before today)
+  function cleanOldSignups() {
+    const todayStr = formatDate(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate());
+    let changed = false;
+    for (const dateStr in signups) {
+      if (dateStr < todayStr) {
+        delete signups[dateStr];
+        changed = true;
+      }
+    }
+    if (changed) saveSignups();
+  }
 
-    let currentDate = new Date();
+  // Load signups object from localStorage and clean old signups
+  function loadSignups() {
+    const saved = localStorage.getItem('signups');
+    if (saved) {
+      signups = JSON.parse(saved);
+    }
+    cleanOldSignups();
+  }
 
-    // signups data structure: will hold data for the currently displayed month
-    let signupsData = {};
+  function renderCalendar() {
+    const calendar = document.getElementById('calendar');
+    const monthYear = document.getElementById('monthYear');
+    calendar.innerHTML = '';
 
-    const calendarEl = document.getElementById('calendar');
-    const monthYearEl = document.getElementById('monthYear');
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
 
-    // Modal elements
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startDay = firstDay.getDay(); // Sunday = 0
+
+    monthYear.textContent = `${firstDay.toLocaleString('default', { month: 'long' })} ${year}`;
+
+    // Fill empty cells for first week day offset
+    for (let i = 0; i < startDay; i++) {
+      const empty = document.createElement('div');
+      calendar.appendChild(empty);
+    }
+
+    const today = new Date();
+    today.setHours(0,0,0,0); // clear time for date comparison
+
+    for (let day = 1; day <= lastDay.getDate(); day++) {
+      const dateStr = formatDate(year, month + 1, day);
+      const dayDate = new Date(year, month, day);
+      dayDate.setHours(0,0,0,0);
+
+      const dayDiv = document.createElement('div');
+      dayDiv.classList.add('day');
+      dayDiv.setAttribute('role', 'listitem');
+      dayDiv.setAttribute('tabindex', '-1');
+
+      const totalSignups = (signups[dateStr] || []).length;
+
+      dayDiv.innerHTML = `<div class="date-number">${day}</div>
+                          <div class="signup-count">${totalSignups} signed up</div>`;
+
+      // Disable past days (not clickable)
+      if (dayDate < today) {
+        dayDiv.style.backgroundColor = '#f0f0f0';
+        dayDiv.style.color = '#999';
+        dayDiv.style.cursor = 'not-allowed';
+        dayDiv.setAttribute('aria-disabled', 'true');
+      } else {
+        dayDiv.onclick = () => openModal(dateStr);
+        dayDiv.setAttribute('tabindex', '0');
+        dayDiv.setAttribute('aria-label', `Day ${day}, ${totalSignups} people signed up. Tap to sign up.`);
+        dayDiv.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            openModal(dateStr);
+          }
+        });
+      }
+
+      calendar.appendChild(dayDiv);
+    }
+  }
+
+  function openModal(dateStr) {
     const modal = document.getElementById('modal');
     const modalDateTitle = document.getElementById('modalDateTitle');
     const signupsList = document.getElementById('signupsList');
     const signupForm = document.getElementById('signupForm');
-    const nameInput = document.getElementById('nameInput');
+    const errorMsg = document.getElementById('errorMsg');
     const startHourSelect = document.getElementById('startHourSelect');
     const endHourSelect = document.getElementById('endHourSelect');
-    const errorMsg = document.getElementById('errorMsg');
-    const closeModalBtn = document.getElementById('closeModalBtn');
 
-    // To track which date is currently open in modal
-    let modalOpenDate = null;
+    modalDateTitle.textContent = `Signups for ${dateStr}`;
+    errorMsg.textContent = '';
 
-    // Setup hour options
-    function setupHourSelects() {
-      startHourSelect.innerHTML = '';
+    // Show existing signups
+    signupsList.innerHTML = '';
+
+    if (signups[dateStr] && signups[dateStr].length > 0) {
+      signups[dateStr].forEach(entry => {
+        const div = document.createElement('div');
+        div.classList.add('signup-entry');
+        div.innerHTML = `<span class="time">${entry.startTime} - ${entry.endTime}</span> <strong>${entry.name}</strong>`;
+        signupsList.appendChild(div);
+      });
+    } else {
+      signupsList.textContent = "No signups yet.";
+    }
+
+    // Reset form inputs
+    signupForm.reset();
+
+    // Populate start hour options
+    startHourSelect.innerHTML = '';
+    endHourSelect.innerHTML = '';
+
+    const startHour = parseInt(DAILY_START.split(':')[0], 10);
+    const endHour = parseInt(DAILY_END.split(':')[0], 10);
+
+    for (let h = startHour; h < endHour; h++) {
+      const option = document.createElement('option');
+      option.value = `${String(h).padStart(2, '0')}:00`;
+      option.textContent = `${String(h).padStart(2, '0')}:00`;
+      startHourSelect.appendChild(option);
+    }
+
+    function updateEndHourOptions() {
+      const selectedStart = parseInt(startHourSelect.value.split(':')[0], 10);
       endHourSelect.innerHTML = '';
-      for (let h = 0; h <= 23; h++) {
-        const opt1 = document.createElement('option');
-        opt1.value = h;
-        opt1.textContent = `${h}:00`;
-        startHourSelect.appendChild(opt1);
-        const opt2 = document.createElement('option');
-        opt2.value = h;
-        opt2.textContent = `${h}:00`;
-        endHourSelect.appendChild(opt2);
-      }
-      startHourSelect.value = '8';
-      endHourSelect.value = '12';
-    }
-
-    // Utility: Format date as YYYY-MM-DD for keys
-    function formatDateKey(date) {
-      return date.toISOString().slice(0, 10);
-    }
-
-    // Utility: Format date string to more readable format for modal title
-    function formatDateDisplay(date) {
-      return date.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-    }
-
-    // Change month, then render calendar for that month
-    function changeMonth(delta) {
-      currentDate.setMonth(currentDate.getMonth() + delta);
-      loadAndRenderCalendar();
-    }
-
-    // Load signups from Firebase for current month
-    function loadSignupsForMonth(year, month) {
-      // We'll query all signups for this month
-      // Since data stored under /signups/YYYY-MM-DD/, and keys are dates, 
-      // we can read all signups and filter by date prefix, or fetch all then filter
-      // To optimize, let's fetch all and then filter by year-month prefix
-
-      return new Promise((resolve, reject) => {
-        db.ref('signups').once('value', (snapshot) => {
-          const allData = snapshot.val() || {};
-          // Filter keys starting with year-month e.g. '2025-08'
-          const prefix = `${year.toString().padStart(4, '0')}-${(month+1).toString().padStart(2, '0')}`;
-          const filtered = {};
-          for (const dateKey in allData) {
-            if (dateKey.startsWith(prefix)) {
-              filtered[dateKey] = allData[dateKey];
-            }
-          }
-          resolve(filtered);
-        }, (error) => {
-          reject(error);
-        });
-      });
-    }
-
-    // Listen for realtime updates for current month, re-render calendar when changed
-    function setupRealtimeListener(year, month) {
-      // Remove old listener if any
-      if (setupRealtimeListener.ref) {
-        setupRealtimeListener.ref.off();
-      }
-      // Listen to all signups and filter by month
-      const signupsRef = db.ref('signups');
-      setupRealtimeListener.ref = signupsRef;
-
-      signupsRef.on('value', (snapshot) => {
-        const allData = snapshot.val() || {};
-        const prefix = `${year.toString().padStart(4, '0')}-${(month+1).toString().padStart(2, '0')}`;
-        const filtered = {};
-        for (const dateKey in allData) {
-          if (dateKey.startsWith(prefix)) {
-            filtered[dateKey] = allData[dateKey];
-          }
-        }
-        signupsData = filtered;
-        renderCalendar();
-        // If modal open, refresh its content with updated data
-        if (modalOpenDate) {
-          renderModalContent(modalOpenDate);
-        }
-      });
-    }
-
-    // Render calendar grid for currentDate
-    function renderCalendar() {
-      calendarEl.innerHTML = '';
-
-      const year = currentDate.getFullYear();
-      const month = currentDate.getMonth();
-
-      // Display month-year title
-      monthYearEl.textContent = currentDate.toLocaleDateString(undefined, { year: 'numeric', month: 'long' });
-
-      // Find first day of the month (0=Sunday, 1=Monday,...)
-      const firstDay = new Date(year, month, 1);
-      const startWeekday = firstDay.getDay();
-
-      // Number of days in this month
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-      // Fill blank days for previous month (for Sunday-start calendar)
-      for (let i = 0; i < startWeekday; i++) {
-        const blankDay = document.createElement('div');
-        blankDay.classList.add('day');
-        blankDay.style.visibility = 'hidden';
-        calendarEl.appendChild(blankDay);
-      }
-
-      // Create day cells
-      for (let day = 1; day <= daysInMonth; day++) {
-        const dayDiv = document.createElement('div');
-        dayDiv.classList.add('day');
-        dayDiv.setAttribute('role', 'listitem');
-        dayDiv.tabIndex = 0;
-
-        const dateObj = new Date(year, month, day);
-        const dateKey = formatDateKey(dateObj);
-
-        // Date number
-        const dateNumber = document.createElement('div');
-        dateNumber.textContent = day;
-        dateNumber.classList.add('date-number');
-        dayDiv.appendChild(dateNumber);
-
-        // Show how many people signed up for that day in total
-        let totalSignedUp = 0;
-        if (signupsData[dateKey]) {
-          // Sum all time ranges signups
-          for (const signupId in signupsData[dateKey]) {
-            totalSignedUp++;
-          }
-        }
-
-        // Check if max people reached for any overlapping time ranges
-        // This is more complex, but for day display let's just show total count
-        // Detailed conflict check done inside modal
-
-        const countEl = document.createElement('div');
-        countEl.classList.add('signup-count');
-        countEl.textContent = totalSignedUp === 0 ? 'No signups' : `${totalSignedUp} signed up`;
-        dayDiv.appendChild(countEl);
-
-        // If fully booked (more than MAX_PEOPLE_AT_ONCE in all ranges combined, just as rough indication)
-        if (totalSignedUp >= MAX_PEOPLE_AT_ONCE * 5) { 
-          // 5 is an arbitrary threshold since hours vary; you can refine logic here
-          dayDiv.classList.add('full');
-          dayDiv.title = 'Fully booked';
-        }
-
-        // Click or key enter opens modal for that date
-        dayDiv.addEventListener('click', () => openModal(dateObj));
-        dayDiv.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            openModal(dateObj);
-          }
-        });
-
-        calendarEl.appendChild(dayDiv);
+      for (let h = selectedStart + 1; h <= endHour; h++) {
+        const option = document.createElement('option');
+        option.value = `${String(h).padStart(2, '0')}:00`;
+        option.textContent = `${String(h).padStart(2, '0')}:00`;
+        endHourSelect.appendChild(option);
       }
     }
 
-    // Open modal for a specific date
-    function openModal(dateObj) {
-      modalOpenDate = dateObj;
-      modalDateTitle.textContent = formatDateDisplay(dateObj);
-      errorMsg.textContent = '';
-      nameInput.value = '';
-      setupHourSelects();
-      renderModalContent(dateObj);
-      modal.style.display = 'flex';
-      nameInput.focus();
-      document.body.style.overflow = 'hidden'; // prevent background scroll
-    }
+    startHourSelect.onchange = updateEndHourOptions;
+    updateEndHourOptions();
 
-    // Close modal
-    function closeModal() {
-      modal.style.display = 'none';
-      modalOpenDate = null;
-      errorMsg.textContent = '';
-      document.body.style.overflow = ''; // restore scroll
-    }
-
-    closeModalBtn.addEventListener('click', closeModal);
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) closeModal();
-    });
-
-    // Escape key closes modal
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && modal.style.display === 'flex') {
-        closeModal();
-      }
-    });
-
-    // Render modal content: show existing signups and setup form
-    function renderModalContent(dateObj) {
-      const dateKey = formatDateKey(dateObj);
-      signupsList.innerHTML = '';
-
-      if (signupsData[dateKey]) {
-        const daySignups = signupsData[dateKey];
-
-        // Sort signups by startHour
-        const sortedSignups = Object.values(daySignups).sort((a, b) => a.startHour - b.startHour);
-
-        if (sortedSignups.length === 0) {
-          signupsList.textContent = 'No signups yet for this day.';
-        } else {
-          sortedSignups.forEach(signup => {
-            const div = document.createElement('div');
-            div.classList.add('signup-entry');
-            div.textContent = `${signup.name} — ${signup.startHour}:00 to ${signup.endHour}:00`;
-            signupsList.appendChild(div);
-          });
-        }
-      } else {
-        signupsList.textContent = 'No signups yet for this day.';
-      }
-    }
-
-    // Check if new signup conflicts with max people limit per hour range
-    function canSignup(dateKey, newStart, newEnd) {
-      // Gather all signups on dateKey
-      const daySignups = signupsData[dateKey] || {};
-
-      // We want to check for each hour in [newStart, newEnd), count how many signups overlap
-      // If any hour reaches MAX_PEOPLE_AT_ONCE, reject
-
-      // We'll create an array of length 24 to count overlaps per hour
-      const hourCounts = new Array(24).fill(0);
-
-      for (const signupId in daySignups) {
-        const s = daySignups[signupId];
-        for (let h = s.startHour; h < s.endHour; h++) {
-          hourCounts[h]++;
-        }
-      }
-      // Check new signup hours
-      for (let h = newStart; h < newEnd; h++) {
-        if (hourCounts[h] >= MAX_PEOPLE_AT_ONCE) {
-          return false;
-        }
-      }
-      return true;
-    }
-
-    // Submit signup form
-    signupForm.addEventListener('submit', async (e) => {
+    // Handle form submission
+    signupForm.onsubmit = function(e) {
       e.preventDefault();
       errorMsg.textContent = '';
 
-      const name = nameInput.value.trim();
-      const startHour = parseInt(startHourSelect.value, 10);
-      const endHour = parseInt(endHourSelect.value, 10);
+      const name = document.getElementById('nameInput').value.trim();
+      const startTime = startHourSelect.value;
+      const endTime = endHourSelect.value;
 
-      if (!name) {
+      if (name.length === 0) {
         errorMsg.textContent = 'Please enter your name.';
         return;
       }
-      if (isNaN(startHour) || isNaN(endHour)) {
-        errorMsg.textContent = 'Please select valid start and end hours.';
+      if (!isValidTimeRange(startTime, endTime)) {
+        errorMsg.textContent = 'Invalid time range.';
         return;
       }
-      if (startHour >= endHour) {
-        errorMsg.textContent = 'Start hour must be before end hour.';
+      if (hasOverlap(dateStr, startTime, endTime)) {
+        errorMsg.textContent = 'Time range overlaps with another signup.';
         return;
       }
-
-      const dateKey = formatDateKey(modalOpenDate);
-
-      // Check for conflicts with existing signups
-      if (!canSignup(dateKey, startHour, endHour)) {
-        errorMsg.textContent = 'Sorry, that time range is fully booked. Please choose another time.';
+      if (wouldExceedMax(dateStr, startTime, endTime)) {
+        errorMsg.textContent = 'Max people working at once exceeded for this time.';
         return;
       }
 
-      // Save to Firebase under /signups/YYYY-MM-DD/ with a new push key
-      try {
-        await db.ref(`signups/${dateKey}`).push({
-          name,
-          startHour,
-          endHour
-        });
-
-        // Success - clear form, update UI (Firebase realtime listener will update signupsData and rerender)
-        nameInput.value = '';
-        setupHourSelects();
-        errorMsg.textContent = 'Signup successful!';
-        nameInput.focus();
-      } catch (error) {
-        errorMsg.textContent = 'Error saving signup. Please try again.';
-        console.error('Firebase write error:', error);
+      // Add signup
+      if (!signups[dateStr]) {
+        signups[dateStr] = [];
       }
-    });
+      signups[dateStr].push({ name, startTime, endTime });
+      saveSignups();
+      renderCalendar();
+      openModal(dateStr); // Refresh modal display with updated signups
+    };
 
-    // Validate end hour select dynamically (end hour > start hour)
-    startHourSelect.addEventListener('change', () => {
-      const startVal = parseInt(startHourSelect.value, 10);
-      updateEndHourOptions(startVal);
-    });
+    modal.style.display = 'flex';
 
-    function updateEndHourOptions(minStart) {
-      for (let i = 0; i < endHourSelect.options.length; i++) {
-        const option = endHourSelect.options[i];
-        option.disabled = parseInt(option.value, 10) <= minStart;
+    // Focus the modal for accessibility
+    modal.focus();
+  }
+
+  function closeModal() {
+    const modal = document.getElementById('modal');
+    modal.style.display = 'none';
+  }
+
+  document.getElementById('closeModalBtn').onclick = closeModal;
+
+  // Close modal on background click
+  document.getElementById('modal').onclick = function(e) {
+    if (e.target === this) closeModal();
+  };
+
+  // Keyboard accessibility for modal close on ESC
+  document.addEventListener('keydown', (e) => {
+    const modal = document.getElementById('modal');
+    if (modal.style.display === 'flex' && e.key === 'Escape') {
+      closeModal();
+    }
+  });
+
+  function changeMonth(offset) {
+    currentDate.setMonth(currentDate.getMonth() + offset);
+    renderCalendar();
+  }
+
+  // Utility to format date as YYYY-MM-DD
+  function formatDate(year, month, day) {
+    return `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  }
+
+  // Validate that end > start
+  function isValidTimeRange(start, end) {
+    return (start < end);
+  }
+
+  // Check if new time overlaps existing signups on date
+  function hasOverlap(dateStr, newStart, newEnd) {
+    if (!signups[dateStr]) return false;
+
+    const newStartTime = timeToMinutes(newStart);
+    const newEndTime = timeToMinutes(newEnd);
+
+    for (const s of signups[dateStr]) {
+      const sStart = timeToMinutes(s.startTime);
+      const sEnd = timeToMinutes(s.endTime);
+      if (newStartTime < sEnd && newEndTime > sStart) {
+        return true;
       }
-      if (parseInt(endHourSelect.value, 10) <= minStart) {
-        // Auto select first allowed end hour
-        for (let i = 0; i < endHourSelect.options.length; i++) {
-          if (!endHourSelect.options[i].disabled) {
-            endHourSelect.value = endHourSelect.options[i].value;
-            break;
-          }
+    }
+    return false;
+  }
+
+  // Check if adding new signup exceeds max people limit
+  function wouldExceedMax(dateStr, newStart, newEnd) {
+    const newStartTime = timeToMinutes(newStart);
+    const newEndTime = timeToMinutes(newEnd);
+
+    // Count how many signups overlap with new time interval
+    if (!signups[dateStr]) return false;
+
+    for (let t = newStartTime; t < newEndTime; t++) {
+      let count = 0;
+      for (const s of signups[dateStr]) {
+        const sStart = timeToMinutes(s.startTime);
+        const sEnd = timeToMinutes(s.endTime);
+        if (t >= sStart && t < sEnd) {
+          count++;
         }
       }
+      if (count >= MAX_PEOPLE_AT_ONCE) {
+        return true;
+      }
     }
+    return false;
+  }
 
-    // Load calendar and set up realtime listener
-    async function loadAndRenderCalendar() {
-      const year = currentDate.getFullYear();
-      const month = currentDate.getMonth();
-      // Load signups for month and render calendar after loading
-      // But since we have realtime listener, no need to fetch once here
-      // We'll just set listener, which triggers first load and update
+  // Convert "HH:MM" to minutes since midnight
+  function timeToMinutes(t) {
+    const [h, m] = t.split(':').map(Number);
+    return h * 60 + m;
+  }
 
-      setupRealtimeListener(year, month);
-    }
+  // Initialize
+  loadSignups();
+  renderCalendar();
+</script>
 
-    // Initial setup
-    setupHourSelects();
-    loadAndRenderCalendar();
-  </script>
+<!--   // Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyC93r-r-kHNFqu1A2KjqSGMBbx44CTwP2w",
+  authDomain: "project-for-work-aa517.firebaseapp.com",
+  databaseURL: "https://project-for-work-aa517-default-rtdb.firebaseio.com",
+  projectId: "project-for-work-aa517",
+  storageBucket: "project-for-work-aa517.firebasestorage.app",
+  messagingSenderId: "51216544368",
+  appId: "1:51216544368:web:92f67608efdef977207ab5",
+  measurementId: "G-H9QVKED2J5"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app); -->
+
+
 </body>
 </html>
