@@ -180,6 +180,19 @@
   // { 'YYYY-MM-DD': [ { name, startTime, endTime }, ... ] }
   let signups = {};
 
+  // Save signups object to localStorage
+  function saveSignups() {
+    localStorage.setItem('signups', JSON.stringify(signups));
+  }
+
+  // Load signups object from localStorage
+  function loadSignups() {
+    const saved = localStorage.getItem('signups');
+    if (saved) {
+      signups = JSON.parse(saved);
+    }
+  }
+
   function renderCalendar() {
     const calendar = document.getElementById('calendar');
     const monthYear = document.getElementById('monthYear');
@@ -206,13 +219,6 @@
       dayDiv.classList.add('day');
 
       const totalSignups = (signups[dateStr] || []).length;
-
-      // We estimate full day if any time range conflicts would exceed capacity,
-      // but here just show a warning if already some signups exist.
-      // (You can customize this logic)
-      if (totalSignups >= MAX_PEOPLE_AT_ONCE * ( (18-9) * 2 )) { // rough max if every half hour slot full
-        dayDiv.classList.add('full');
-      }
 
       dayDiv.innerHTML = `<div class="date-number">${day}</div>
                           <div class="signup-count">${totalSignups} signed up</div>`;
@@ -277,9 +283,9 @@
         return;
       }
 
-      // Check overlap & capacity
       if (!signups[dateStr]) signups[dateStr] = [];
 
+      // Check overlap & capacity
       const overlappingCount = countOverlap(signups[dateStr], startTime, endTime);
       if (overlappingCount >= MAX_PEOPLE_AT_ONCE) {
         errorMsg.textContent = "Too many people already scheduled during this time range.";
@@ -294,8 +300,9 @@
         return;
       }
 
-      // All good: add signup
+      // Add signup
       signups[dateStr].push({ name, startTime, endTime });
+      saveSignups();
 
       openModal(dateStr); // Refresh modal
       renderCalendar();   // Update calendar counts/colors
@@ -340,6 +347,8 @@
     }
   };
 
+  // Load saved signups and render calendar
+  loadSignups();
   renderCalendar();
 </script>
 
